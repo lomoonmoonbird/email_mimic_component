@@ -1,4 +1,9 @@
+#! --*-- coding:utf-8 --*--
+
 from configparser import ConfigParser, RawConfigParser
+import os
+from collections import defaultdict
+from itertools import count
 
 try:
     from configparser import OrderedDict as _default_dict
@@ -45,3 +50,42 @@ class Config(RawConfigParser ):
             while '' in res:
                 res.remove('')
         return res
+
+class _config(object):
+
+    def __init__(self, name):
+        self.name = name
+        self.age = 1
+
+    def __repr__(self):
+        return "Var(%s) age(%s)" % (self.name, self.age)
+
+
+class smtpconfig(defaultdict):
+
+    def __init__(self, *args, **kwargs):
+        super(smtpconfig, self).__init__(_config, *args, **kwargs)
+
+    def __missing__(self, key, unique=count()):
+        if self.default_factory is None:
+            raise KeyError(key)
+        if key == "_":
+            return self.default_factory(key + str(next(unique)))
+        self[key] = value = self.default_factory(key)
+        return value
+
+def readConfig(config_path=""):
+    """读取配置"""
+    configFile = config_path
+    if os.path.exists(configFile) == False:
+        print('Configuration file "' + configFile + '" doesn''t exist. Exiting.')
+        return False
+
+    cfg =Config()
+    cfg.read([configFile])
+    smtpcfg = smtpconfig()
+    smtpcfg['config'].port = cfg.getint('config', 'port', 25)
+    smtpcfg['config'].debuglevel = cfg.getint('config', 'port', 5)
+    smtpcfg['config'].distribute_hosts = cfg.get('config', 'distribute_hosts', '[]')
+
+    return smtpcfg

@@ -137,61 +137,51 @@ class proxy_server():
 
 class pop_imap_proxy:
 
-    def recv_email_by_pop3(self):
-        # 邮件接收的邮箱
-        email_address = "jinpeng"
-        # 邮件接收的邮箱的密码
-        email_password = "jinpeng"
-        # 邮箱对应的imap地址
-        pop_server_host = "mail.example.com"
-        # pop服务器的监听端口
-        pop_server_port = 110
+    def recv_email_by_pop3(self, address, password, host, port):
 
         email_server = None
         try:
-            email_server = poplib.POP3(host=pop_server_host, port=pop_server_port, timeout=10)
+            email_server = poplib.POP3(host=host, port=port, timeout=10)
         except:
+            import traceback
+            traceback.print_exc()
             exit(1)
         try:
             # 验证邮箱是否存在
-            email_server.user(email_address)
+            email_server.user(address)
         except:
+            import traceback
+            traceback.print_exc()
             exit(1)
         try:
             # 验证邮箱密码是否正确
-            email_server.pass_(email_password)
+            email_server.pass_(password)
         except:
+            import traceback
+            traceback.print_exc()
             exit(1)
 
         email_count = len(email_server.list()[1])
         resp, lines, octets = email_server.retr(email_count)
         email_content = b'\r\n'.join(lines)
         email_content = email_content.decode()
-        print(email_content)
-
+        print('-----------')
+        print(resp, lines, octets)
         email_server.close()
 
-    def recv_email_by_imap4(self):
-        # 邮件接收的邮箱
-        email_address = "jinpeng"
-        # 邮件接收的邮箱的密码
-        email_password = "jinpeng"
-        # 邮箱对应的imap地址
-        imap_server_host = "mail.example.com"
-        # 邮箱对应的imap服务器的监听端口
-        imap_server_port = 143
+    def recv_email_by_imap4(self, address, password, host, port):
 
         email_server = None
 
         try:
-            email_server = imaplib.IMAP4(host=imap_server_host, port=imap_server_port)
+            email_server = imaplib.IMAP4(host=host, port=port)
         except:
             import traceback
             traceback.print_exc()
             exit(1)
         try:
             # 验证邮箱及密码是否正确
-            email_server.login(email_address, email_password)
+            email_server.login(address, password)
         except:
             exit(1)
 
@@ -201,9 +191,24 @@ class pop_imap_proxy:
         email_content = email_content[0][1].decode()
         email_server.close()
         email_server.logout()
+        print('-----------')
+        print( typ, email_content)
 
 if __name__ == "__main__":
+    # 邮件接收的邮箱
+    email_address = "jinpeng"
+    # 邮件接收的邮箱的密码
+    email_password = "jinpeng"
+    # 邮箱对应的imap地址
+    pop_server_host = "mail.example.com"
+    # pop服务器的监听端口
+    pop_server_port = 110
+    hosts = [("jinpeng", "jinpeng", "mail.example.com", 110), ("jinpeng", "jinpeng", "mail2.example.com", 110)]
+    # email_client = pop_imap_proxy()
+    # email_client.recv_email_by_imap4("jinpeng", "jinpeng", "mail.example.com", 143)
     # 实例化
     email_client = pop_imap_proxy()
-    email_client.recv_email_by_pop3()
-    # email_client.recv_email_by_imap4()
+    for address, password, host, port in [hosts[0]]:
+        print(address, password, host, port)
+        email_client.recv_email_by_pop3(address, password, host, port)
+        # email_client.recv_email_by_imap4(address, password, host, port)

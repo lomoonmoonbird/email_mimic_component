@@ -135,7 +135,9 @@ class SMTPServerEngine:
         data = data.decode() if isinstance(data, bytes) else data
         keep = 1
         rv = None
+        print(cmd, data[5:10])
         if cmd == "HELO" or cmd == "EHLO":
+            print('22323')
             self.state = SMTPServerEngine.ST_HELO
             rv = self.impl.helo(data)
         elif cmd == "RSET":
@@ -169,27 +171,15 @@ class SMTPServerEngine:
             if self.state != SMTPServerEngine.ST_HELO:
                 return ("503 Bad command sequence", 1)
             self.state = SMTPServerEngine.ST_AUTH
-
             return ("334 VXNlcm5hbWU6", 1)
-
-        elif cmd == "AUTH" and data[5:10].upper() == "PLAIN":
-            self.state = SMTPServerEngine.ST_AUTH
-            self.impl.mail.create_clients()
-            # pwd = data.split(" ")[2]
-            for client in self.impl.mail.mail_clients:
-                a = client.docmd(data.strip())
-                print('@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@', a)
-            return ("235 Authentication Succeeded", 1)
 
         else:
             if self.state == SMTPServerEngine.ST_AUTH:
-                print(1)
                 self.state = SMTPServerEngine.ST_PASS
                 self.log.logdebug('username')
                 return ("334 UGFzc3dvcmQ6", 1)
             elif self.state == SMTPServerEngine.ST_PASS:
                 self.state = SMTPServerEngine.ST_HELO
-                self.impl.mail.create_clients()
                 return ("235 Authentication Succeeded", 1)
             else:
                 return ("500 unrecogonize, enter again.", 1)
