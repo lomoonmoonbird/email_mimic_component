@@ -1,5 +1,6 @@
 import socket, string, threading
-
+from threading import Lock
+from collections import defaultdict
 
 class SMTPServerInterface:
     """
@@ -89,11 +90,13 @@ class SMTPServerEngine:
     ST_AUTH = 10
     ST_PASS = 11
 
-    def __init__(self, socket, impl, log):
+    def __init__(self, socket, impl, log, lock, share_data):
         self.impl = impl
         self.socket = socket
         self.state = SMTPServerEngine.ST_INIT
         self.log = log
+        self.impl.lock = lock
+        self.impl.share_data = share_data
 
     def run(self):
         """
@@ -118,7 +121,7 @@ class SMTPServerEngine:
                             if rsp == None:
                                 continue
                         if not isinstance(rsp, bytes):
-                            rsp = rsp.encode()
+                            rsp = rsp.encode() if not isinstance(rsp, bool) else bytes(rsp)
                         self.socket.send(rsp + "\r\n".encode())
 
                         if keep == 0:
@@ -135,9 +138,7 @@ class SMTPServerEngine:
         data = data.decode() if isinstance(data, bytes) else data
         keep = 1
         rv = None
-        print(cmd, data[5:10])
         if cmd == "HELO" or cmd == "EHLO":
-            print('22323')
             self.state = SMTPServerEngine.ST_HELO
             rv = self.impl.helo(data)
         elif cmd == "RSET":
@@ -167,12 +168,19 @@ class SMTPServerEngine:
             self.data_accum = ""
             return ("354 OK, Enter data, terminated with a \\r\\n.\\r\\n", 1)
 
+
+
+        elif cmd == "AUTH" and data[5:10].upper() == "PLAIN":
+            self.impl.mail.create_clients()
+            self.state = SMTPServerEngine.ST_HELO
+            return ("235 Authentication Succeeded", 1)
+        #
         elif cmd == "AUTH" and data[5:10].upper() == "LOGIN":
             if self.state != SMTPServerEngine.ST_HELO:
-                return ("503 Bad command sequence", 1)
+                return ("503 Bad command sequence." + str(self.state), 1)
             self.state = SMTPServerEngine.ST_AUTH
-            return ("334 VXNlcm5hbWU6", 1)
 
+            return ("334 VXNlcm5hbWU6", 1)
         else:
             if self.state == SMTPServerEngine.ST_AUTH:
                 self.state = SMTPServerEngine.ST_PASS
@@ -180,6 +188,7 @@ class SMTPServerEngine:
                 return ("334 UGFzc3dvcmQ6", 1)
             elif self.state == SMTPServerEngine.ST_PASS:
                 self.state = SMTPServerEngine.ST_HELO
+                self.impl.mail.create_clients()
                 return ("235 Authentication Succeeded", 1)
             else:
                 return ("500 unrecogonize, enter again.", 1)
@@ -197,12 +206,12 @@ class SMTPServerEngine:
         self.data_accum = self.data_accum + data
         if len(self.data_accum) > 4 and self.data_accum[-5:] == '\r\n.\r\n':
             self.data_accum = self.data_accum[:-5]
-            rv = self.impl.data(self.data_accum)
+            flag = self.impl.data(self.data_accum)
             self.state = SMTPServerEngine.ST_HELO
-            if rv:
-                return rv
-            else:
+            if flag:
                 return "250 OK - Data and terminator. found"
+            else:
+                return flag
         else:
             return None
 
@@ -219,6 +228,8 @@ class SMTPServer:
         self._socket.bind(("", port))
         self._socket.listen(5)
         self._log = log
+        self.lock = Lock()
+        self.share_data = defaultdict(lambda:defaultdict(list))
 
     def serve(self, impl_class=SMTPServerInterfaceDebug):
         """
@@ -226,7 +237,7 @@ class SMTPServer:
         """
         while 1:
             sock, _ = self._socket.accept()
-            engine = SMTPServerEngine(sock, impl_class(), self._log)
+            engine = SMTPServerEngine(sock, impl_class(), self._log, self.lock, self.share_data)
             t = threading.Thread(target=self.handle_connection, args=(engine,))
             t.start()
 

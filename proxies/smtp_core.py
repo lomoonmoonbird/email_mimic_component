@@ -118,7 +118,7 @@ class SMTPServerEngine:
                             if rsp == None:
                                 continue
                         if not isinstance(rsp, bytes):
-                            rsp = rsp.encode()
+                            rsp = rsp.encode() if not isinstance(rsp, bool) else bytes(rsp)
                         self.socket.send(rsp + "\r\n".encode())
 
                         if keep == 0:
@@ -165,25 +165,24 @@ class SMTPServerEngine:
             self.data_accum = ""
             return ("354 OK, Enter data, terminated with a \\r\\n.\\r\\n", 1)
 
+
+
+        elif cmd == "AUTH" and data[5:10].upper() == "PLAIN":
+            self.impl.mail.create_clients()
+            for client in self.impl.mail.mail_clients:
+                msg, resp = client.docmd(data.strip())
+                # return (bytes(msg) + b' ' + data, 1)
+            self.state = SMTPServerEngine.ST_HELO
+            return ("235 Authentication Succeeded", 1)
+        #
         elif cmd == "AUTH" and data[5:10].upper() == "LOGIN":
             if self.state != SMTPServerEngine.ST_HELO:
-                return ("503 Bad command sequence", 1)
+                return ("503 Bad command sequence." + str(self.state), 1)
             self.state = SMTPServerEngine.ST_AUTH
 
             return ("334 VXNlcm5hbWU6", 1)
-
-        elif cmd == "AUTH" and data[5:10].upper() == "PLAIN":
-            self.state = SMTPServerEngine.ST_AUTH
-            self.impl.mail.create_clients()
-            # pwd = data.split(" ")[2]
-            for client in self.impl.mail.mail_clients:
-                a = client.docmd(data.strip())
-                print('@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@', a)
-            return ("235 Authentication Succeeded", 1)
-
         else:
             if self.state == SMTPServerEngine.ST_AUTH:
-                print(1)
                 self.state = SMTPServerEngine.ST_PASS
                 self.log.logdebug('username')
                 return ("334 UGFzc3dvcmQ6", 1)
@@ -207,12 +206,12 @@ class SMTPServerEngine:
         self.data_accum = self.data_accum + data
         if len(self.data_accum) > 4 and self.data_accum[-5:] == '\r\n.\r\n':
             self.data_accum = self.data_accum[:-5]
-            rv = self.impl.data(self.data_accum)
+            flag = self.impl.data(self.data_accum)
             self.state = SMTPServerEngine.ST_HELO
-            if rv:
-                return rv
-            else:
+            if flag:
                 return "250 OK - Data and terminator. found"
+            else:
+                return flag
         else:
             return None
 

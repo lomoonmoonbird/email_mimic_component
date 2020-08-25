@@ -3,6 +3,8 @@
 import socket, threading
 import poplib, re
 from proxies.config import readConfig
+from judge import left_judge
+from collections import defaultdict
 
 DEFAULT_KEY = "pop_proxy"
 MAX_CLIENT = 10
@@ -33,6 +35,8 @@ class Dispatch():
         self.client_command = ""
         self.current_folder = ""
         self.boxes = []
+        self.server_sockets = []
+        self.response_map = defaultdict(list)
 
         try:
            self.send_to_client('+OK proxy ready.')
@@ -97,12 +101,40 @@ class Dispatch():
                     client_sequence = self.recv_from_client()
                 self.send_to_server(client_sequence)
 
+    def listen_server_v2(self, server_tag, server_socket):
+        """ 监听pop邮件服务，通过servertag绑定响应的客户端，处理完整的服务器命令响应，"""
+
+        while True:
+
+            response = self.recv_from_server_v2(server_socket)
+            response_match = Tagged_Response.match(response)
+            #完整命令响应
+            if response_match:
+                server_response_tag = response_match.group('tag') #判断tag
+                if server_tag == server_response_tag:
+
+                    # self.send_to_client(response.replace(server_response_tag, self.client_tag, 1))
+                    self.response_map[server_socket.socket().fileno()].append(response)
+                    return
+
+            #没有tag
+            # self.send_to_client(response)
+            self.response_map[server_socket.socket().fileno()].append(response)
+
+            if response.startswith('+') and self.client_command.upper() != 'FETCH':
+                #持续监听
+                client_sequence = self.recv_from_client()
+                while client_sequence != '' and not client_sequence.endswith(
+                        '\r\n'):  # Client sequence ends with empty request
+                    self.send_to_server_v2(client_sequence, server_socket)
+                    client_sequence = self.recv_from_client()
+                self.send_to_server_v2(client_sequence, server_socket)
+
     def connect_server(self, username, password, host):
         """ 连接真正的pop服务器"""
 
         username = self.remove_quotation_marks(username)
         password = self.remove_quotation_marks(password)
-        print('actual suer:', username, password)
         self.server_socket = poplib.POP3(host)
 
         try:
@@ -113,17 +145,42 @@ class Dispatch():
             self.send_to_client(self.failure())
             raise ValueError('Error while connecting to the server: '
                              + 'Invalid credentials: ' + username + " / " + password)
-
         # self.send_to_client(self.success())
+
+    def connect_server_v2(self, username, password, host):
+        """ 连接真正的pop服务器"""
+
+        username = self.remove_quotation_marks(username)
+        password = self.remove_quotation_marks(password)
+
+        while 1:
+            try:
+                server_socket = poplib.POP3(host)
+                server_socket.user(username)
+                server_socket.pass_(password)
+                self.response_map[id(server_socket)].append("+OK Logged in.")
+                return server_socket
+            except poplib.error_proto as e:
+                continue
+            except Exception as e:
+                raise ValueError('Error while connecting to the server: '
+                                 + 'Invalid credentials: ' + username + " / " + password)
+
 
     def recv_from_client(self):
         """ 返回接收客户端去掉CRLF的请求 """
 
         b_request = self.client_socket.recv(1024)
-        print('b_request------------------------.>', b_request)
         str_request = b_request.decode('utf-8', 'replace')[:-2]  # decode and remove CRLF
 
         return str_request
+
+    def recv_from_server_v2(self, server_socket):
+        """ 返回接收服务端端去掉CRLF的请求 """
+        b_response = server_socket._get_line()
+        str_response = b_response.decode('utf-8', 'replace')
+
+        return str_response
 
     def recv_from_server(self):
         """ 返回接收服务端端去掉CRLF的请求 """
@@ -140,6 +197,12 @@ class Dispatch():
         self.send_to_server(self.request.replace(self.client_tag, server_tag, 1))
         self.listen_server(server_tag)
 
+    def transmit_v2(self, server_socket):
+        """ 将客户端的tag替换为服务端的tag，并发送请求到服务端，然后监听服务端 """
+        server_tag = server_socket._new_tag().decode()
+        self.send_to_server_v2(self.request.replace(self.client_tag, server_tag, 1), server_socket)
+        self.listen_server_v2(server_tag, server_socket)
+
     # def send_to_client(self, str_data):
     #     """ 发送客户端"""
     #     b_data = str_data.encode('utf-8', 'replace') + CRLF
@@ -150,6 +213,9 @@ class Dispatch():
     #     b_data = str_data.encode('utf-8', 'replace') + CRLF
     #     self.server_socket.send(b_data)
 
+    def destroy(self):
+        self.response_map = defaultdict(list)
+
     def send_to_client(self, str_data):
         """ 发送客户端"""
         b_data = str_data.encode('utf-8', 'replace') + CRLF if not isinstance(str_data, bytes) else str_data + CRLF
@@ -159,6 +225,11 @@ class Dispatch():
         """发送服务端"""
         b_data = str_data.encode('utf-8', 'replace') + CRLF if not isinstance(str_data, bytes) else str_data + CRLF
         self.server_socket.sendall(b_data)
+
+    def send_to_server_v2(self, str_data, server_socket):
+        """发送服务端"""
+        b_data = str_data.encode('utf-8', 'replace') + CRLF
+        server_socket.send(b_data)
 
     def success(self):
         """ 命令成功的响应体 """
@@ -182,6 +253,10 @@ class Dispatch():
         """ 设置用户邮箱的文件夹名称 """
         self.current_folder = self.remove_quotation_marks(folder)
 
+    def saying(self, res):
+        for saying in res:
+            self.send_to_client(saying)
+
     def dispatch(self, cmd):
         return dict(
             USER=self.handle_user,
@@ -192,31 +267,19 @@ class Dispatch():
             RETR=self.handle_retr,
             DELE=self.handle_dele,
             NOOP=self.handle_noop,
-            SELECT=self.handle_select,
             QUIT=self.handle_quit,
             LOGIN=self.handle_login,
-            ID=self.handle_id,
-            FETCH=self.handle_fetch,
             UIDL=self.handle_uidl
         ).get(cmd, None)
 
     def handle_uidl(self):
-        msg, mail_ids, _ = self.server_socket.uidl()
-        mail_ids = b''.join([x + b"\r\n" for x in mail_ids])
-        self.send_to_client(msg + b'\r\n' + mail_ids + b'.')
-
-
-    def handle_select(self):
-        self.set_current_folder(self.client_flags)
-        self.transmit()
-
-    def handle_fetch(self):
-        self.transmit()
-
-    def handle_id(self):
-        if not self.server_socket:
-            self.listen_client()
-        self.transmit()
+        self.destroy()
+        for s_socket in self.server_sockets:
+            msg, mail_ids, _ = s_socket.uidl()
+            mail_ids = b''.join([x + b"\r\n" for x in mail_ids])
+            self.response_map[id(s_socket)].append(msg + b'\r\n' + mail_ids + b'.')
+        res = left_judge(self.response_map)
+        self.saying(res)
 
     def handle_login(self):
         username, password = self.client_flags.split(" ")
@@ -231,47 +294,76 @@ class Dispatch():
     def handle_pass(self):
         self.password = self.client_flags
         hosts = [(hp.split(':')[0], hp.split(':')[1]) for hp in smtpcfg['config'].distribute_hosts.split(",")]
-        self.connect_server(self.username, self.password, hosts[0][0])
-        self.send_to_client("+OK Logged in.")
-        # self.transmit()
+        # self.connect_server(self.username, self.password, hosts[0][0])
+        # self.send_to_client("+OK Logged in.")
+
+        for host in hosts:
+            server_sock = self.connect_server_v2(self.username, self.password, host[0])
+            self.server_sockets.append(server_sock)
+
+        res = left_judge(self.response_map)
+        self.saying(res)
 
     def handle_stat(self):
-        num, bytes = self.server_socket.stat()
-        self.send_to_client("+OK "+ str(num) + ' ' + str(bytes))
-        # self.transmit()
+        self.destroy()
+        for s_socket in self.server_sockets:
+            num, bytes = s_socket.stat()
+            self.response_map[id(s_socket)].append("+OK "+ str(num) + ' ' + str(bytes))
+        res = left_judge(self.response_map)
+        self.saying(res)
+
 
     def handle_list(self):
-        msg, mail_ids, _ = self.server_socket.list()
-        mail_ids = b''.join([x + b"\r\n" for x in mail_ids])
-        self.send_to_client(msg + b'\r\n' + mail_ids +b'.')
+        self.destroy()
+        for s_socket in self.server_sockets:
+            msg, mail_ids, _ = s_socket.list()
+            mail_ids = b''.join([x + b"\r\n" for x in mail_ids])
+            self.response_map[id(s_socket)].append(msg + b'\r\n' + mail_ids +b'.')
+        res = left_judge(self.response_map)
+        self.saying(res)
 
     def handle_noop(self):
-        pass
+        self.destroy()
+        for s_socket in self.server_sockets:
+            resp = s_socket.noop()
+            self.response_map[id(s_socket)].append(resp)
+        res = left_judge(self.response_map)
+        self.saying(res)
 
     def handle_top(self):
         start, end = self.client_flags.split(" ")
-        msg, mails, _ = self.server_socket.top(start, end)
-        mails = b''.join([x + b"\r\n" for x in mails])
-        self.send_to_client(msg + b'\r\n' + mails)
+        self.destroy()
+        for s_socket in self.server_sockets:
+            msg, mails, _ = s_socket.top(start, end)
+            mails = [x + b"\r\n" for x in mails]
+            mails.insert(0, msg)
+            self.response_map[id(s_socket)] = mails
+        res = left_judge(self.response_map)
+        self.saying(res)
+
 
     def handle_retr(self):
-        res, lines, octets  = self.server_socket.retr(self.client_flags)
-        # mails = b''.join([x + b"\r\n" for x in mails])
-        # self.send_to_client(msg + b'\r\n' + mails)
-        print(res)
-        print(lines)
-        print(octets)
-        self.send_to_client(res)
-        for m in lines:
-            print(m)
-            self.send_to_client(m)
+        self.destroy()
+        for s_socket in self.server_sockets:
+            res, lines, octets  = s_socket.retr(self.client_flags)
+            lines =  [x + b"\r\n" for x in lines]
+            lines.insert(0, res)
+            self.response_map[id(s_socket)] = lines
+        res = left_judge(self.response_map)
+
+        self.saying(res)
 
     def handle_dele(self):
         return "+OK message 1 deleted"
 
     def handle_quit(self):
-        self.server_socket.quit()
-        self.send_to_client("+OK Logging out.")
+        self.destroy()
+        for s_socket in self.server_sockets:
+            rsp = s_socket.quit()
+            self.response_map[id(s_socket)].append(rsp)
+        res = left_judge(self.response_map)
+        self.saying(res)
+        self.client_socket.close()
 
 class POPServer:
     """

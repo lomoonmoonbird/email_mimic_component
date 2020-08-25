@@ -1,20 +1,15 @@
 # -- * -- coding:utf-8 --*--
 
-import asyncio
-import logging
-logging.basicConfig(level=logging.INFO)
-from aiohttp import web
-from proxies.http_proxy import Proxy
 
-async def init(loop):
-    app = web.Application(loop=loop)
-    app.router.add_route('POST', '/', Proxy.send_mail)
-    runner = web.AppRunner(app)
-    await runner.setup()
-    site = web.TCPSite(runner, '0.0.0.0', 9000)
-    logging.info('server started at localhost 9000...')
-    await site.start()
+from proxies.http_proxy import HTTPServer
+from proxies.config import readConfig
 
-loop = asyncio.get_event_loop()
-loop.run_until_complete(init(loop))
-loop.run_forever()
+if __name__ == '__main__':
+    httpcfg = readConfig("proxies/http_config.ini")
+    try:
+        s = HTTPServer().serve(port=httpcfg['config'].port)
+        s.serve()
+    except:
+        import traceback
+        traceback.print_exc()
+        pass

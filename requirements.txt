@@ -5,7 +5,6 @@ atpublic==1.0
 attrs==19.3.0
 chardet==3.0.4
 idna==2.10
-kittengroomer-email==1.0.0
 libmagic==1.0
 lxml==4.5.2
 multidict==4.7.6
@@ -13,7 +12,6 @@ officedissector==1.0
 olefile==0.46
 PySocks==1.7.1
 python-dateutil==2.8.1
-python-magic-bin @ file:///F:/python_magic_bin-0.4.14-py2.py3-none-win32.whl
 six==1.15.0
 socks==0
 Twiggy==0.5.0

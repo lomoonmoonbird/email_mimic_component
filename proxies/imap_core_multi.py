@@ -50,9 +50,11 @@ class Dispatch():
         self.server_sockets = []
         self.response_map = defaultdict(list)
 
+
+    def run(self):
         try:
-           self.send_to_client('* OK proxy ready.')
-           self.listen_client()
+            self.send_to_client('* OK proxy ready.')
+            self.listen_client()
         except (BrokenPipeError, ConnectionResetError):
             print("connection closed")
         except ValueError as e:
@@ -66,9 +68,11 @@ class Dispatch():
 
                 if not match:
                     self.send_to_client(self.error("Incorrect request"))
-                    # raise ValueError('Error while listening the client: '
-                    #     + request + ' contains no tag and/or no command')
-                    break
+                    import traceback
+                    traceback.print_exc()
+                    raise ValueError('Error while listening the client: '
+                        + request + ' contains no tag and/or no command')
+
 
                 self.client_tag = match.group('tag')
                 self.client_command = match.group('command').upper()
@@ -76,7 +80,6 @@ class Dispatch():
                 self.request = request
 
                 cmd = self.dispatch(self.client_command)
-                print(self.client_command)
                 if cmd:
                     try:
                         cmd()
@@ -85,7 +88,6 @@ class Dispatch():
                         traceback.print_exc()
                         break
                 else:
-                    print(self.client_command)
                     for s_socket in self.server_sockets:
                         self.transmit_v2(s_socket)
                     res = left_judge(self.response_map)
@@ -98,7 +100,6 @@ class Dispatch():
 
             response = self.recv_from_server_v2(server_socket)
             response_match = Tagged_Response.match(response)
-            print('response', response)
             #完整命令响应
             if response_match:
                 server_response_tag = response_match.group('tag') #判断tag
@@ -128,16 +129,16 @@ class Dispatch():
         username = self.remove_quotation_marks(username)
         password = self.remove_quotation_marks(password)
 
-        print("Trying to connect ", username, host)
+        print("Trying to connect ", username, password, host)
         while 1:
-            print(111111)
             try:
                 server_socket = imaplib.IMAP4(host)
                 server_socket.login(username, password)
-                print(server_socket)
                 self.response_map[server_socket.socket().fileno()].append(self.success())
                 return server_socket
             except imaplib.IMAP4.abort:
+                import traceback
+                traceback.print_exc()
                 continue
             except imaplib.IMAP4.error:
                 import traceback
@@ -151,6 +152,7 @@ class Dispatch():
         """ 返回接收客户端去掉CRLF的请求 """
 
         b_request = self.client_socket.recv(1024)
+        print('from client --------->', b_request)
         str_request = b_request.decode('utf-8', 'replace')[:-2]  # decode and remove CRLF
 
         return str_request
@@ -171,7 +173,6 @@ class Dispatch():
 
     def transmit_v2(self, server_socket):
         """ 将客户端的tag替换为服务端的tag，并发送请求到服务端，然后监听服务端 """
-        print(server_socket)
         server_tag = server_socket._new_tag().decode()
         self.send_to_server_v2(self.request.replace(self.client_tag, server_tag, 1), server_socket)
         self.listen_server_v2(server_tag, server_socket)
@@ -244,6 +245,10 @@ class Dispatch():
         # self.set_current_folder(self.client_flags)
         for s_socket in self.server_sockets:
             self.transmit_v2(s_socket)
+        # for fd, msg_list in self.response_map.items():
+        #     for msg in msg_list:
+        #         self.client_socket.send(msg.encode('utf-8') + CRLF)
+        #     break
         res = left_judge(self.response_map)
         self.saying(res)
 
@@ -255,15 +260,12 @@ class Dispatch():
         self.saying(res)
 
     def handle_id(self):
-        print('id begin')
         self.destroy()
-        # if not self.server_socket:
-        #     self.listen_client()
-        print('id middle')
+        if not self.server_socket:
+            self.send_to_client('NO user not valid')
         for s_socket in self.server_sockets:
             self.transmit_v2(s_socket)
         res = left_judge(self.response_map)
-        print(res, 'res')
         self.saying(res)
 
     def handle_capa(self):
@@ -273,13 +275,14 @@ class Dispatch():
 
     def handle_login(self):
         self.destroy()
+        self.server_sockets = []
         username, password = self.client_flags.split(" ")
         hosts = [(hp.split(':')[0], hp.split(':')[1]) for hp in smtpcfg['config'].distribute_hosts.split(",")]
         for host in hosts:
-            print(host)
             server_sock = self.connect_server_v2(username, password, host[0])
             self.server_sockets.append(server_sock)
         res = left_judge(self.response_map)
+
         self.saying(res)
 
 
@@ -293,7 +296,17 @@ class Dispatch():
         pass
 
     def handle_list(self):
-        pass
+        self.destroy()
+        for s_socket in self.server_sockets:
+            self.transmit_v2(s_socket)
+        # for fd, msg_list in self.response_map.items():
+        #     for msg in msg_list:
+        #         self.client_socket.send(msg.encode('utf-8') + CRLF)
+        #     break
+        print(self.response_map, len(self.response_map))
+        res = left_judge(self.response_map)
+        print('list list ->>', res)
+        self.saying(res)
 
     def handle_top(self):
         return None
@@ -307,7 +320,11 @@ class Dispatch():
         return "+OK message 1 deleted"
 
     def handle_noop(self):
-        pass
+        self.destroy()
+        for s_socket in self.server_sockets:
+            self.transmit_v2(s_socket)
+        res = left_judge(self.response_map)
+        self.saying(res)
 
     def handle_quit(self):
         self.client_listening = False
@@ -338,4 +355,4 @@ class IMAPServer:
     def handle_connection(self, sock):
         """处理imap连接"""
         # engine = IMAPServerEngine(sock, self._log)
-        Dispatch(sock, self.key)
+        Dispatch(sock, self.key).run()

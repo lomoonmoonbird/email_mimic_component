@@ -1,5 +1,5 @@
 #! --*-- coding: utf-8 --*--
-from proxies import pop_core, pop_core_old
+from proxies import pop_core
 
 if __name__ == '__main__':
     try:
