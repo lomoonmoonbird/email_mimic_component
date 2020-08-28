@@ -68,17 +68,14 @@ class Dispatch():
 
                 if not match:
                     self.send_to_client(self.error("Incorrect request"))
-                    import traceback
-                    traceback.print_exc()
                     raise ValueError('Error while listening the client: '
                         + request + ' contains no tag and/or no command')
-
 
                 self.client_tag = match.group('tag')
                 self.client_command = match.group('command').upper()
                 self.client_flags = match.group('flags')
                 self.request = request
-
+                print("[from client]:", self.client_tag,self.client_command,self.client_flags  )
                 cmd = self.dispatch(self.client_command)
                 if cmd:
                     try:
@@ -99,25 +96,27 @@ class Dispatch():
         while True:
 
             response = self.recv_from_server_v2(server_socket)
+
             response_match = Tagged_Response.match(response)
             #完整命令响应
             if response_match:
                 server_response_tag = response_match.group('tag') #判断tag
                 if server_tag == server_response_tag:
-
-                    # self.send_to_client(response.replace(server_response_tag, self.client_tag, 1))
                     self.response_map[server_socket.socket().fileno()].append(response.replace(server_response_tag, self.client_tag, 1))
                     return
 
+            if self.client_command.upper() == 'IDLE':
+                self.response_map[server_socket.socket().fileno()].append(response)
+                return
+
             #没有tag
-            # self.send_to_client(response)
             self.response_map[server_socket.socket().fileno()].append(response)
 
             if response.startswith('+') and self.client_command.upper() != 'FETCH':
                 #持续监听
                 client_sequence = self.recv_from_client()
                 while client_sequence != '' and not client_sequence.endswith(
-                        '\r\n'):  # Client sequence ends with empty request
+                        '\r\n'):
                     self.send_to_server_v2(client_sequence, server_socket)
                     client_sequence = self.recv_from_client()
                 self.send_to_server_v2(client_sequence, server_socket)
@@ -129,7 +128,7 @@ class Dispatch():
         username = self.remove_quotation_marks(username)
         password = self.remove_quotation_marks(password)
 
-        print("Trying to connect ", username, password, host)
+        # print("Trying to connect ", username, password, host)
         while 1:
             try:
                 server_socket = imaplib.IMAP4(host)
@@ -144,36 +143,32 @@ class Dispatch():
                 import traceback
                 traceback.print_exc()
                 raise ValueError('Error while connecting to the server: '
-                                 + 'Invalid credentials: ' + username + " / " + password)
+                                 + 'Invalid credentials: ' + username + " / " + password + " / "+ host)
 
 
 
     def recv_from_client(self):
         """ 返回接收客户端去掉CRLF的请求 """
-
         b_request = self.client_socket.recv(1024)
-        print('from client --------->', b_request)
         str_request = b_request.decode('utf-8', 'replace')[:-2]  # decode and remove CRLF
-
         return str_request
 
     def recv_from_server(self):
         """ 返回接收服务端端去掉CRLF的请求 """
         b_response = self.server_socket._get_line()
         str_response = b_response.decode('utf-8', 'replace')
-
         return str_response
 
     def recv_from_server_v2(self, server_socket):
         """ 返回接收服务端端去掉CRLF的请求 """
         b_response = server_socket._get_line()
         str_response = b_response.decode('utf-8', 'replace')
-
         return str_response
 
     def transmit_v2(self, server_socket):
         """ 将客户端的tag替换为服务端的tag，并发送请求到服务端，然后监听服务端 """
         server_tag = server_socket._new_tag().decode()
+        # print('@@@@@@@@@@@@@@@', id(server_socket), self.request.replace(self.client_tag, server_tag, 1))
         self.send_to_server_v2(self.request.replace(self.client_tag, server_tag, 1), server_socket)
         self.listen_server_v2(server_tag, server_socket)
 
@@ -225,47 +220,73 @@ class Dispatch():
         return dict(
             USER=self.handle_user,
             PASS=self.handle_pass,
-            # STAT=self.handle_stat,
+            STAT=self.handle_stat,
             LIST=self.handle_list,
             TOP=self.handle_top,
             RETR=self.handle_retr,
+            LSUB = self.handle_lsub,
+            STATUS = self.handler_status,
             DELE=self.handle_dele,
             NOOP=self.handle_noop,
             SELECT=self.handle_select,
             QUIT=self.handle_quit,
             LOGIN=self.handle_login,
             CAPABILITY=self.handle_capa,
+            IDLE = self.handle_idle,
             ID = self.handle_id,
             FETCH = self.handle_fetch
         ).get(cmd, None)
 
 
-    def handle_select(self):
+    def handle_idle(self):
         self.destroy()
-        # self.set_current_folder(self.client_flags)
         for s_socket in self.server_sockets:
             self.transmit_v2(s_socket)
-        # for fd, msg_list in self.response_map.items():
-        #     for msg in msg_list:
-        #         self.client_socket.send(msg.encode('utf-8') + CRLF)
-        #     break
-        res = left_judge(self.response_map)
+        res = left_judge(self.response_map, switch='off')
+        print('idle res', res)
+        self.saying(res)
+
+    def handler_status(self):
+        self.destroy()
+        for s_socket in self.server_sockets:
+            self.transmit_v2(s_socket)
+        res = left_judge(self.response_map, switch='off')
+        print('status res', res)
+        self.saying(res)
+
+    def handle_lsub(self):
+        self.destroy()
+        for s_socket in self.server_sockets:
+            self.transmit_v2(s_socket)
+        res = left_judge(self.response_map, switch='off')
+        print('lsub res', res)
+        self.saying(res)
+
+    def handle_select(self):
+        self.destroy()
+        for s_socket in self.server_sockets:
+            self.transmit_v2(s_socket)
+        res = left_judge(self.response_map, switch='off')
+        print('select res', res)
         self.saying(res)
 
     def handle_fetch(self):
         self.destroy()
         for s_socket in self.server_sockets:
             self.transmit_v2(s_socket)
-        res = left_judge(self.response_map)
+        res = left_judge(self.response_map, switch='off')
+        print('fetch res', res)
         self.saying(res)
 
     def handle_id(self):
         self.destroy()
-        if not self.server_socket:
-            self.send_to_client('NO user not valid')
-        for s_socket in self.server_sockets:
-            self.transmit_v2(s_socket)
-        res = left_judge(self.response_map)
+        # if not self.server_socket:
+        #         #     self.send_to_client('NO user not valid')
+        #         # for s_socket in self.server_sockets:
+        #         #     self.transmit_v2(s_socket)
+        #         # res = left_judge(self.response_map, switch='off')
+        #         # print('id res', self.response_map)
+        res = ['* ID ("name" "Dovecot")', 'C2 OK ID completed (0.001 + 0.000 secs).']
         self.saying(res)
 
     def handle_capa(self):
@@ -281,8 +302,8 @@ class Dispatch():
         for host in hosts:
             server_sock = self.connect_server_v2(username, password, host[0])
             self.server_sockets.append(server_sock)
-        res = left_judge(self.response_map)
-
+        res = left_judge(self.response_map, switch='off')
+        print('login res', res)
         self.saying(res)
 
 
@@ -293,28 +314,25 @@ class Dispatch():
         pass
 
     def handle_stat(self):
+        print('stat')
         pass
 
     def handle_list(self):
         self.destroy()
         for s_socket in self.server_sockets:
             self.transmit_v2(s_socket)
-        # for fd, msg_list in self.response_map.items():
-        #     for msg in msg_list:
-        #         self.client_socket.send(msg.encode('utf-8') + CRLF)
-        #     break
-        print(self.response_map, len(self.response_map))
-        res = left_judge(self.response_map)
-        print('list list ->>', res)
+        res = left_judge(self.response_map, switch='off')
+        # res = [x + '\r\n' for x in res]
+        print('list res',type(res[0]),res)
         self.saying(res)
 
     def handle_top(self):
+        print('top')
         return None
 
     def handle_retr(self):
-        # pycircleanmail_module(self)
+        print('retr')
         pass
-        # self.transmit()
 
     def handle_dele(self):
         return "+OK message 1 deleted"
@@ -323,7 +341,8 @@ class Dispatch():
         self.destroy()
         for s_socket in self.server_sockets:
             self.transmit_v2(s_socket)
-        res = left_judge(self.response_map)
+        res = left_judge(self.response_map, switch='off')
+        print('noop res', res)
         self.saying(res)
 
     def handle_quit(self):
@@ -354,5 +373,4 @@ class IMAPServer:
 
     def handle_connection(self, sock):
         """处理imap连接"""
-        # engine = IMAPServerEngine(sock, self._log)
         Dispatch(sock, self.key).run()

@@ -222,7 +222,8 @@ class Dispatch():
     def handle_login(self):
         username, password = self.client_flags.split(" ")
         hosts = [(hp.split(':')[0], hp.split(':')[1]) for hp in smtpcfg['config'].distribute_hosts.split(",")]
-        self.connect_server(username, password, hosts[0][0])
+        print( hosts[1][0])
+        self.connect_server(username, password, hosts[1][0])
         # self.connect_server(username, password, 'mail2.example.com')
 
     def handle_user(self):

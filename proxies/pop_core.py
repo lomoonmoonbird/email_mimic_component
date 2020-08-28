@@ -70,6 +70,7 @@ class Dispatch():
                         import traceback
                         traceback.print_exc()
                 else:
+                    print('no command')
                     self.send_to_client("+OK")
 
 
@@ -161,6 +162,8 @@ class Dispatch():
                 self.response_map[id(server_socket)].append("+OK Logged in.")
                 return server_socket
             except poplib.error_proto as e:
+                import traceback
+                traceback.print_exc()
                 continue
             except Exception as e:
                 raise ValueError('Error while connecting to the server: '
@@ -278,7 +281,8 @@ class Dispatch():
             msg, mail_ids, _ = s_socket.uidl()
             mail_ids = b''.join([x + b"\r\n" for x in mail_ids])
             self.response_map[id(s_socket)].append(msg + b'\r\n' + mail_ids + b'.')
-        res = left_judge(self.response_map)
+        res = left_judge(self.response_map, switch='off')
+        print('uidl res', res)
         self.saying(res)
 
     def handle_login(self):
@@ -296,12 +300,12 @@ class Dispatch():
         hosts = [(hp.split(':')[0], hp.split(':')[1]) for hp in smtpcfg['config'].distribute_hosts.split(",")]
         # self.connect_server(self.username, self.password, hosts[0][0])
         # self.send_to_client("+OK Logged in.")
-
         for host in hosts:
             server_sock = self.connect_server_v2(self.username, self.password, host[0])
             self.server_sockets.append(server_sock)
-
-        res = left_judge(self.response_map)
+        print(self.server_sockets)
+        res = left_judge(self.response_map, switch='off')
+        print('pass res' ,res)
         self.saying(res)
 
     def handle_stat(self):
@@ -309,7 +313,8 @@ class Dispatch():
         for s_socket in self.server_sockets:
             num, bytes = s_socket.stat()
             self.response_map[id(s_socket)].append("+OK "+ str(num) + ' ' + str(bytes))
-        res = left_judge(self.response_map)
+        res = left_judge(self.response_map, switch='off')
+        print('stat res', res)
         self.saying(res)
 
 
@@ -319,7 +324,8 @@ class Dispatch():
             msg, mail_ids, _ = s_socket.list()
             mail_ids = b''.join([x + b"\r\n" for x in mail_ids])
             self.response_map[id(s_socket)].append(msg + b'\r\n' + mail_ids +b'.')
-        res = left_judge(self.response_map)
+        res = left_judge(self.response_map, switch='off')
+        print('list res', res)
         self.saying(res)
 
     def handle_noop(self):
@@ -327,18 +333,26 @@ class Dispatch():
         for s_socket in self.server_sockets:
             resp = s_socket.noop()
             self.response_map[id(s_socket)].append(resp)
-        res = left_judge(self.response_map)
+        res = left_judge(self.response_map, switch='off')
+        print('noop res', res)
         self.saying(res)
 
     def handle_top(self):
         start, end = self.client_flags.split(" ")
         self.destroy()
+        print(self.client_flags, start ,end)
+        # for s_socket in self.server_sockets:
+        #     msg, mails, _ = s_socket.top(start, end)
+        #     mails = [x + b"\r\n" for x in mails]
+        #     mails.insert(0, msg)
+        #     self.response_map[id(s_socket)] = mails
         for s_socket in self.server_sockets:
             msg, mails, _ = s_socket.top(start, end)
-            mails = [x + b"\r\n" for x in mails]
-            mails.insert(0, msg)
-            self.response_map[id(s_socket)] = mails
-        res = left_judge(self.response_map)
+            mails = b''.join([x + b"\r\n" for x in mails])
+            # mails.insert(0, msg)
+            self.response_map[id(s_socket)].append(msg + b'\r\n' + mails + b'.')
+        res = left_judge(self.response_map, switch='off')
+        print('top res', res)
         self.saying(res)
 
 
@@ -346,11 +360,11 @@ class Dispatch():
         self.destroy()
         for s_socket in self.server_sockets:
             res, lines, octets  = s_socket.retr(self.client_flags)
-            lines =  [x + b"\r\n" for x in lines]
+            lines =  [x + b"\r\n" for x in lines] + [b'.']
             lines.insert(0, res)
             self.response_map[id(s_socket)] = lines
-        res = left_judge(self.response_map)
-
+        res = left_judge(self.response_map, switch='off')
+        print('retr res', res)
         self.saying(res)
 
     def handle_dele(self):
@@ -361,7 +375,7 @@ class Dispatch():
         for s_socket in self.server_sockets:
             rsp = s_socket.quit()
             self.response_map[id(s_socket)].append(rsp)
-        res = left_judge(self.response_map)
+        res = left_judge(self.response_map, switch='off')
         self.saying(res)
         self.client_socket.close()
 

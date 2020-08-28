@@ -1,6 +1,6 @@
-import socket, string, threading
-from threading import Lock
-from collections import defaultdict
+#! --*-- coding: utf-8 --*--
+
+import socket, threading
 
 class SMTPServerInterface:
     """
@@ -50,8 +50,6 @@ def splitTo(address):
         return address
     return (address[sep:end], address[start:end],)
 
-
-
 class SMTPServerInterfaceDebug(SMTPServerInterface):
     """
     测试用
@@ -90,13 +88,11 @@ class SMTPServerEngine:
     ST_AUTH = 10
     ST_PASS = 11
 
-    def __init__(self, socket, impl, log, lock, share_data):
+    def __init__(self, socket, impl, log):
         self.impl = impl
         self.socket = socket
         self.state = SMTPServerEngine.ST_INIT
         self.log = log
-        self.impl.lock = lock
-        self.impl.share_data = share_data
 
     def run(self):
         """
@@ -106,29 +102,34 @@ class SMTPServerEngine:
         while 1:
             data = b''
             complete_line = 0
-            while not complete_line:
-                lump = self.socket.recv(1024)
-                if not isinstance(lump, bytes):
-                    lump = lump.encode()
-                if len(lump):
-                    data += lump
-                    if (len(data) >= 2) and data[-2:] == b'\r\n':
-                        complete_line = 1
-                        if self.state != SMTPServerEngine.ST_DATA:
-                            rsp, keep = self.do_command(data)
-                        else:
-                            rsp = self.do_data(data)
-                            if rsp == None:
-                                continue
-                        if not isinstance(rsp, bytes):
-                            rsp = rsp.encode() if not isinstance(rsp, bool) else bytes(rsp)
-                        self.socket.send(rsp + "\r\n".encode())
+            try:
+                while not complete_line:
+                    lump = self.socket.recv(1024)
+                    if not isinstance(lump, bytes):
+                        lump = lump.encode()
+                    if len(lump):
+                        data += lump
+                        if (len(data) >= 2) and data[-2:] == b'\r\n':
+                            complete_line = 1
+                            if self.state != SMTPServerEngine.ST_DATA:
+                                rsp, keep = self.do_command(data)
+                            else:
+                                rsp = self.do_data(data)
+                                if rsp == None:
+                                    continue
+                            if not isinstance(rsp, bytes):
+                                rsp = rsp.encode() if not isinstance(rsp, bool) else bytes(rsp)
+                            self.socket.send(rsp + "\r\n".encode())
 
-                        if keep == 0:
-                            self.socket.close()
-                            return
-                else:
-                    return
+                            if keep == 0:
+                                self.socket.close()
+                                return
+                    else:
+                        return
+            except:
+                import traceback
+                traceback.print_exc()
+                continue
         return
 
     def do_command(self, data):
@@ -138,13 +139,13 @@ class SMTPServerEngine:
         data = data.decode() if isinstance(data, bytes) else data
         keep = 1
         rv = None
+        print('----->', cmd)
         if cmd == "HELO" or cmd == "EHLO":
             self.state = SMTPServerEngine.ST_HELO
             rv = self.impl.helo(data)
         elif cmd == "RSET":
             rv = self.impl.reset(data)
             self.data_accum = ""
-            # self.state = SMTPServerEngine.ST_INIT
             self.state = SMTPServerEngine.ST_HELO
         elif cmd == "NOOP":
             pass
@@ -168,13 +169,11 @@ class SMTPServerEngine:
             self.data_accum = ""
             return ("354 OK, Enter data, terminated with a \\r\\n.\\r\\n", 1)
 
-
-
         elif cmd == "AUTH" and data[5:10].upper() == "PLAIN":
             self.impl.mail.create_clients()
             self.state = SMTPServerEngine.ST_HELO
             return ("235 Authentication Succeeded", 1)
-        #
+
         elif cmd == "AUTH" and data[5:10].upper() == "LOGIN":
             if self.state != SMTPServerEngine.ST_HELO:
                 return ("503 Bad command sequence." + str(self.state), 1)
@@ -228,8 +227,6 @@ class SMTPServer:
         self._socket.bind(("", port))
         self._socket.listen(5)
         self._log = log
-        self.lock = Lock()
-        self.share_data = defaultdict(lambda:defaultdict(list))
 
     def serve(self, impl_class=SMTPServerInterfaceDebug):
         """
@@ -237,7 +234,7 @@ class SMTPServer:
         """
         while 1:
             sock, _ = self._socket.accept()
-            engine = SMTPServerEngine(sock, impl_class(), self._log, self.lock, self.share_data)
+            engine = SMTPServerEngine(sock, impl_class(), self._log)
             t = threading.Thread(target=self.handle_connection, args=(engine,))
             t.start()
 

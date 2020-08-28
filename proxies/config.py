@@ -87,5 +87,8 @@ def readConfig(config_path=""):
     smtpcfg['config'].port = cfg.getint('config', 'port', 25)
     smtpcfg['config'].debuglevel = cfg.getint('config', 'port', 5)
     smtpcfg['config'].distribute_hosts = cfg.get('config', 'distribute_hosts', '[]')
+    smtpcfg['config'].redis_server = cfg.get('config', 'redis_server', '')
+    smtpcfg['config'].redis_port = cfg.get('config', 'redis_port', 6379)
+    smtpcfg['config'].redis_db = cfg.get('config', 'redis_db', 0)
 
     return smtpcfg

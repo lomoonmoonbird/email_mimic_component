@@ -174,7 +174,7 @@ class SMTPServerEngine:
                 # return (bytes(msg) + b' ' + data, 1)
             self.state = SMTPServerEngine.ST_HELO
             return ("235 Authentication Succeeded", 1)
-        #
+
         elif cmd == "AUTH" and data[5:10].upper() == "LOGIN":
             if self.state != SMTPServerEngine.ST_HELO:
                 return ("503 Bad command sequence." + str(self.state), 1)

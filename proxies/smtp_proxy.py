@@ -25,11 +25,20 @@ class Mail():
     def create_clients(self):
         hosts = [(hp.split(':')[0], hp.split(':')[1]) for hp in smtpcfg['config'].distribute_hosts.split(",")]
         for host, port in hosts:
-            server = smtplib.SMTP(host, port)
-            server.connect(host, port)
-            server.set_debuglevel(smtpcfg['config'].debuglevel)
-            server.ehlo()
-            self.mail_clients.append(server)
+
+            try:
+                print('creating..', host ,port)
+                server = smtplib.SMTP(host, port)
+                server.connect(host, port)
+                server.ehlo()
+                server.set_debuglevel(smtpcfg['config'].debuglevel)
+                server.ehlo()
+                self.mail_clients.append(server)
+            except:
+                print("problemn:", host, port)
+                import traceback
+                traceback.print_exc()
+                # server.close()
 
 def encode_plain(user, password):
     """ 加密user password"""
@@ -101,19 +110,54 @@ class SMTPProxy(smtp_core.SMTPServerInterface):
         """
         import email.utils
         import hashlib
+        import uuid
         from email.mime.text import MIMEText
         from email.mime.multipart import MIMEMultipart
         from email.header import Header
 
+
         self.mail.msg = (data)
+        random_uuid = str(uuid.uuid4())
         md = hashlib.md5()
         md.update(self.mail.msg.encode('utf-8'))
-        origin = email.message_from_string(self.mail.msg)
         self.mail.msg = 'Receive: ( SMTP PROXY ) ' + email.utils.formatdate() + '\n' + self.mail.msg
         self.mail.msg = 'Accept-Language: ISO-8859-1,utf-8' + '\n' + self.mail.msg
-        self.mail.msg = 'Accept-Language: ISO-8859-1,utf-8' + '\n' + self.mail.msg
-        self.mail.msg = 'Tag: ' +  md.hexdigest() + '\n' +self.mail.msg
+        self.mail.msg = 'MD5:' + md.hexdigest() + '\n' + self.mail.msg
+        self.mail.msg = 'Tag:' + 'tag_' + random_uuid + '\n' + self.mail.msg
 
+
+        origin = email.message_from_string(self.mail.msg)
+
+        # if origin.is_multipart():
+        #     for part in origin.walk():
+        #         ctype = part.get_content_type()
+        #         cdispo = str(part.get('Content-Disposition'))
+        #
+        #         if ctype == 'text/plain' and 'attachment' not in cdispo:
+        #             body = part.get_payload(decode=True)  # decode
+        #             break
+        # else:
+        """-----------------
+        body = origin.get_payload(decode=True)
+        ctype = origin.get_content_type()
+        msg = MIMEMultipart()
+        msg['Subject'] = origin['Subject']
+        msg['Receive'] = origin['Receive']
+        msg['From'] = self.mail.frm
+        msg['To'] = self.mail.to[0]
+        msg['reply-to'] = ""
+        msg['X-Priority'] = ""
+        msg['CC'] = ""
+        msg['BCC'] = ""
+        msg['Tag'] = origin['Tag']
+        msg['MD5'] = origin['MD5']
+        msg['Return-Receipt-To'] = self.mail.frm
+        msg["Accept-Language"] = "zh-CN"
+        msg.preamble = 'Event Notification'
+        msg["Accept-Charset"] = "ISO-8859-1,utf-8"
+        msg.attach(MIMEText(body, ctype.split('/')[1], 'utf-8'))
+        print('mail -> ', self.mail.to[0])
+        -------------------"""
 
         # msg = MIMEMultipart()
         # msg['Subject'] = origin.get('Subject', '')
@@ -123,7 +167,8 @@ class SMTPProxy(smtp_core.SMTPServerInterface):
         # msg['X-Priority'] = ""
         # msg['CC'] = ""
         # msg['BCC'] = ""
-        # msg['Tag'] = md.hexdigest()
+        # msg['Tag'] = random_uuid
+        # msg['MD5'] = md.hexdigest()
         # msg['Return-Receipt-To'] = self.mail.frm
         # msg["Accept-Language"] = "zh-CN"
         # msg.preamble = 'Event Notification'
@@ -138,35 +183,37 @@ class SMTPProxy(smtp_core.SMTPServerInterface):
         # msg["Accept-Charset"] = "ISO-8859-1,utf-8"
 
         obj_list = []
+        print('self.mail.mail_clients', self.mail.mail_clients)
+        with ThreadPoolExecutor(max_workers=10) as e:
+            for client in self.mail.mail_clients:
+                # try:
+                self.mail.msg = 'HOST:' + client._host + '\n' + self.mail.msg
+                # msg['HOST'] = client._host
+                obj = e.submit(self.send, client, self.mail.frm, self.mail.to[0], self.mail.msg)
+                obj_list.append(obj)
+                for future in as_completed(obj_list):
+                    senderrs = future.result()
+                    print(senderrs, 'senderrrrrrrr')
+            return True
+                # except smtplib.SMTPServerDisconnected as e:
+                #     import traceback
+                #     traceback.print_exc()
+                #     pass
+                # except:
+                #     import traceback
+                #     traceback.print_exc()
+                #     return False
 
-        try_time = 0
-        while try_time < 3:
-            with ThreadPoolExecutor(max_workers=3) as e:
-                try:
-                    for client in self.mail.mail_clients:
-                        obj = e.submit(self.send, client, self.mail.frm, self.mail.to[0], self.mail.msg)
-                        obj_list.append(obj)
-                    for future in as_completed(obj_list):
-                        senderrs = future.result()
-                        if senderrs:
-                            return False
-                    return True
-                except smtplib.SMTPServerDisconnected as e:
-                    try_time += 1
-                    print('error a ')
-                    continue
-                except:
-                    import traceback
-                    traceback.print_exc()
-                    print('error b')
-                    print(client.__dict__)
-                    return False
 
     def send(self, client, sender, receiver, mail):
-        senderrs = client.sendmail(sender, receiver, mail)
-        print(senderrs)
-        client.quit()
-        return senderrs
+        try:
+            senderrs = client.sendmail(sender, receiver, mail)
+            client.quit()
+            return senderrs
+        except:
+            import traceback
+            traceback.print_exc()
+            raise Exception('send errror')
 
 
 

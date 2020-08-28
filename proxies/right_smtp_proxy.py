@@ -8,10 +8,14 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import smtplib
 from judge import right_judge
 from collections import defaultdict
+import redis
 
-CONFIG_PATH = 'proxies/smtp_config.ini'
+
+CONFIG_PATH = 'proxies/right_smtp_config.ini'
 smtpcfg = readConfig(CONFIG_PATH)
-
+client = redis.Redis(host=smtpcfg['config'].redis_server,
+                     port=smtpcfg['config'].redis_port,
+                     db=smtpcfg['config'].redis_db)
 
 class Mail():
     """
@@ -47,7 +51,7 @@ class SMTPProxy(smtp_core.SMTPServerInterface):
         "250-SIZE 102400",
         "250-VRFY",
         "250-ETRN",
-        "250-STARTTLS",
+        # "250-STARTTLS",
         "250-AUTH PLAIN LOGIN",
         "250-ENHANCEDSTA",
         "250-8BITMIME",
@@ -57,11 +61,6 @@ class SMTPProxy(smtp_core.SMTPServerInterface):
 
     def __init__(self):
         self.mail = Mail()
-        self.lock = None
-        self.share_data = defaultdict(lambda: defaultdict(list))
-
-    def reset_share_data(self, tag):
-        del self.share_data[tag]
 
     def helo(self, args):
         return '' .join([item + '\r\n' for item in self.HELO])[:-4]
@@ -107,39 +106,91 @@ class SMTPProxy(smtp_core.SMTPServerInterface):
         :return:
         """
         import smtplib
+        import base64
         from email.parser import HeaderParser
+        from email.header import decode_header
+        from email.mime.multipart import MIMEMultipart
+        from email.mime.text import MIMEText
         self.mail.msg = (data)
         parser = HeaderParser()
         headers = parser.parsestr(self.mail.msg)
-        print(headers.keys())
-        with self.lock:
-            tag = headers.get('Tag', "")
-            if tag:
-                self.share_data[tag]['tags'].append(tag)
-                self.share_data[tag]['mails'].append(self.mail.msg)
-                right_judge(tag, self.share_data)
-                print('【mails】',self.share_data[tag])
-                if self.share_data[tag]['choice']:
-                    try:
-                        host = "localhost"
-                        server = smtplib.SMTP(host, port=25)
-                        server.ehlo()
-                        # mail = email.message_from_string(self.share_data[tag]['choice'])
-                        res = server.sendmail(self.mail.frm, self.mail.to, self.share_data[tag]['choice'])
-                        print('send mail ', res)
-                        self.reset_share_data(tag)
-                        server.quit()
-                        print("Email Send")
-                    except:
-                        import traceback
-                        traceback.print_exc()
+        tag = headers.get('Tag', "")
+        host = headers.get('Host', "")
+        print('iam data')
+        try:
+
+            if tag and host:
+                origin = email.message_from_string(self.mail.msg)
+                msg = MIMEMultipart()
+                msg['Subject'] = origin['Subject']
+                msg['Receive'] = origin['Receive']
+                msg['From'] = self.mail.frm
+                msg['To'] = self.mail.to[0]
+                msg['reply-to'] = ""
+                msg['X-Priority'] = ""
+                msg['CC'] = ""
+                msg['BCC'] = ""
+                msg['Tag'] = origin['Tag']
+                msg['MD5'] = origin['MD5']
+                msg['Return-Receipt-To'] = self.mail.frm
+                msg["Accept-Language"] = "zh-CN"
+                msg.preamble = 'Event Notification'
+                msg["Accept-Charset"] = "ISO-8859-1,utf-8"
+
+                print(self.mail.msg)
+                if origin.is_multipart():
+                    print('multipart')
+                    for part in origin.walk():
+                            ctype = part.get_content_type()
+                            cdispo = str(part.get('Content-Disposition'))
+
+                            if ctype == 'text/html' and 'attachment' not in cdispo:
+                                body = origin.get_payload(decode=True)
+                                ctype = origin.get_content_type()
+
+                                msg.attach(MIMEText(body, ctype.split('/')[1], 'utf-8'))
+                                print('multi part mail %s -> %s ', (host, self.mail.to[0]))
+                                client.hset(tag, host, msg.as_string())
+                                client.expire(tag, 300)
+                else:
+                    body = origin.get_payload(decode=True)
+                    print(host)
+                    ctype = origin.get_content_type()
+
+                    msg.attach(MIMEText(body, ctype.split('/')[1], 'utf-8'))
+                    print('non multi part mail %s -> %s', (host, self.mail.to[0]))
+                    client.hset(tag, host, msg.as_string())
+                    client.expire(tag, 300)
+        except:
+            import traceback
+            traceback.print_exc()
+        return True
 
     def send(self, client, sender, receiver, mail):
-        print(sender, receiver)
-        print(mail)
-        senderrs = client.sendmail(sender, receiver, mail)
-        client.quit()
-        return senderrs
+        try:
+            senderrs = client.sendmail(sender, receiver, mail)
+            client.quit()
+            return senderrs
+        except:
+            import traceback
+            traceback.print_exc()
+            raise Exception('send error!')
 
-
-
+    def handle_schedule_mails(self):
+        import time
+        while True:
+            keys = client.scan_iter(match='tag_*', count=20)
+            for key in keys:
+                data = client.hgetall(key)
+                mail = right_judge(data)
+                if mail:
+                    host = "localhost"
+                    server = smtplib.SMTP(host, port=25)
+                    server.ehlo()
+                    msg = email.message_from_string(mail.decode())
+                    senderrs = server.sendmail(msg['From'], msg['TO'], mail)
+                    print('send mail ', senderrs)
+                    if not senderrs:
+                        client.delete(key)
+                    server.quit()
+            time.sleep(3)

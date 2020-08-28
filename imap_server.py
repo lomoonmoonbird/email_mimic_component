@@ -1,5 +1,6 @@
 #! --*-- coding: utf-8 --*--
 from proxies import imap_core_multi
+from proxies import imap_core_single
 from proxies.imap_proxy_bak import IMAP_Proxy
 # from proxies.imap_proxy import IMAP_Proxy
 if __name__ == '__main__':
