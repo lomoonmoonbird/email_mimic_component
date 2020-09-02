@@ -7,54 +7,97 @@ from email.mime.text import MIMEText
 import email
 
 mail = """
-Received: from [192.168.7.158] (helo=[192.168.76.33])
-        by moonmoonbird.com with esmtp (Exim 4.94)
-        (envelope-from <jinpeng@moonmoonbird.com>)
-        id 1kBVNn-001dkV-KE
-        for jinpeng@comleader.com.cn; Thu, 27 Aug 2020 20:48:55 -0700
-HOST:mail7.moonmoonbird.com
+X-Original-To: mail1@moonmoonbird.com
+
+Delivered-To: mail1@moonmoonbird.com
+
+Received: from [192.168.76.33] (unknown [192.168.6.29])
+
+by mail.moonmoonbird.com (Postfix) with ESMTP id ED0BF107AB5D
+
+for <mail1@moonmoonbird.com>; Wed,  2 Sep 2020 01:06:47 +0000 (UTC)
+
 HOST:mail.moonmoonbird.com
-Tag:tag_a2e8201f-275d-42ed-8fdc-d579b9c12fbb
-MD5:c25ce38452ac3e668aa12a4cffec38e7
+
+Tag:tag_d19c43b2-f108-4853-bf25-bcdc26f5897e
+
+MD5:a99f80d6d384a55315adaf7ddb48e928
+
 Accept-Language: ISO-8859-1,utf-8
-Receive: ( SMTP PROXY ) Fri, 28 Aug 2020 03:48:54 -0000
-Date: Fri, 28 Aug 2020 11:48:54 +0800
-From: "jinpeng@moonmoonbird.com" <jinpeng@moonmoonbird.com>
-To: =?GB2312?B?vfDF9A==?= <jinpeng@comleader.com.cn>
-Subject: oooooooooooooo
+
+Receive: ( SMTP PROXY ) Wed, 02 Sep 2020 01:06:47 -0000
+
+Date: Wed, 2 Sep 2020 09:06:47 +0800
+
+From: "mail2@moonmoonbird.com" <mail2@moonmoonbird.com>
+
+To: mail1 <mail1@moonmoonbird.com>
+
+Subject: aaaaaa
+
 X-Priority: 3
-X-GUID: FB11FC2D-F498-484D-91A6-8265BFACDD29
+
+X-GUID: 1E19EEF5-BD40-4F6E-BF3D-1111692FFF3E
+
 X-Has-Attach: no
+
 X-Mailer: Foxmail 7.2.18.95[cn]
+
 Mime-Version: 1.0
-Message-ID: <2020082811485287054014@moonmoonbird.com>
+
+Message-ID: <202009020906417943700@moonmoonbird.com>
+
 Content-Type: multipart/alternative;
-        boundary="----=_001_NextPart518683371422_=----"
+
+boundary="----=_001_NextPart027704675633_=----"
+
+
 
 This is a multi-part message in MIME format.
 
-------=_001_NextPart518683371422_=----
+
+
+------=_001_NextPart027704675633_=----
+
 Content-Type: text/plain;
-        charset="GB2312"
+
+charset="us-ascii"
+
 Content-Transfer-Encoding: base64
 
-eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4DQoNCg0KDQpqaW5wZW5nQG1vb25tb29uYmlyZC5j
-b20NCg==
 
-------=_001_NextPart518683371422_=----
+
+DQpiYmJiYmINCg0KDQptYWlsMkBtb29ubW9vbmJpcmQuY29tDQo=
+
+
+
+------=_001_NextPart027704675633_=----
+
 Content-Type: text/html;
-        charset="GB2312"
+
+charset="us-ascii"
+
 Content-Transfer-Encoding: quoted-printable
 
+
+
 <html><head><meta http-equiv=3D"content-type" content=3D"text/html; charse=
-t=3DGB2312"><style>body { line-height: 1.5; }body { font-size: 14px; font-=
-family: 'Microsoft YaHei UI'; color: rgb(0, 0, 0); line-height: 1.5; }</st=
-yle></head><body>=0A<div><span></span>xxxxxxxxxxxxxxxxxxxxxxxxxxx</div>=0A=
-<div><br></div><hr style=3D"width: 210px; height: 1px;" color=3D"#b5c4df" =
-size=3D"1" align=3D"left">=0A<div><span><div style=3D"MARGIN: 10px; FONT-F=
-AMILY: verdana; FONT-SIZE: 10pt"><div>jinpeng@moonmoonbird.com</div></div>=
-</span></div>=0A</body></html>
-------=_001_NextPart518683371422_=------
+
+t=3Dus-ascii"><style>body { line-height: 1.5; }body { font-size: 14px; fon=
+
+t-family: 'Microsoft YaHei UI'; color: rgb(0, 0, 0); line-height: 1.5; }</=
+
+style></head><body>=0A<div><span></span><br></div>=0A<div>bbbbbb</div><hr =
+
+style=3D"width: 210px; height: 1px;" color=3D"#b5c4df" size=3D"1" align=3D=
+
+"left">=0A<div><span><div style=3D"MARGIN: 10px; FONT-FAMILY: verdana; FON=
+
+T-SIZE: 10pt"><div>mail2@moonmoonbird.com</div></div></span></div>=0A</bod=
+
+y></html>
+
+------=_001_NextPart027704675633_=------
 """
 origin = email.message_from_string(mail)
 ctype = origin.get_content_type()
@@ -94,6 +137,6 @@ if msg.is_multipart():
         print('ctype', ctype)
         if ctype == 'text/plain' and 'attachment' not in cdispo:
             body = part.get_payload(decode=True)  # decode
-            break
+            print(body)
 else:
     print('adsas')

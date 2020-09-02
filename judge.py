@@ -46,8 +46,7 @@ def left_judge(response_map, threshold=3, total=3, switch='on'):
                 key = a[0][0]
                 return response_map[key]
         return []
-    # print(keys, response_map)
-    return response_map[keys[1]]
+    return response_map[keys[0]]
 
 client = redis.Redis(host='rproxy.moonmoonbird.com', port=6379, db=0)
 

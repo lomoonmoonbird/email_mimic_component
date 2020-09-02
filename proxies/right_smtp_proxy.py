@@ -137,9 +137,7 @@ class SMTPProxy(smtp_core.SMTPServerInterface):
                 msg.preamble = 'Event Notification'
                 msg["Accept-Charset"] = "ISO-8859-1,utf-8"
 
-                print(self.mail.msg)
                 if origin.is_multipart():
-                    print('multipart')
                     for part in origin.walk():
                             ctype = part.get_content_type()
                             cdispo = str(part.get('Content-Disposition'))
@@ -149,16 +147,15 @@ class SMTPProxy(smtp_core.SMTPServerInterface):
                                 ctype = origin.get_content_type()
 
                                 msg.attach(MIMEText(body, ctype.split('/')[1], 'utf-8'))
-                                print('multi part mail %s -> %s ', (host, self.mail.to[0]))
+                                print('multi part mail %s -> %s ' % (host, self.mail.to[0]))
                                 client.hset(tag, host, msg.as_string())
                                 client.expire(tag, 300)
                 else:
                     body = origin.get_payload(decode=True)
-                    print(host)
                     ctype = origin.get_content_type()
 
                     msg.attach(MIMEText(body, ctype.split('/')[1], 'utf-8'))
-                    print('non multi part mail %s -> %s', (host, self.mail.to[0]))
+                    print('non multi part mail %s -> %s' % (host, self.mail.to[0]))
                     client.hset(tag, host, msg.as_string())
                     client.expire(tag, 300)
         except:

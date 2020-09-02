@@ -35,7 +35,7 @@ class Mail():
                 server.ehlo()
                 self.mail_clients.append(server)
             except:
-                print("problemn:", host, port)
+                print("problemn:",  host, port)
                 import traceback
                 traceback.print_exc()
                 # server.close()
@@ -137,27 +137,27 @@ class SMTPProxy(smtp_core.SMTPServerInterface):
         #             body = part.get_payload(decode=True)  # decode
         #             break
         # else:
-        """-----------------
-        body = origin.get_payload(decode=True)
-        ctype = origin.get_content_type()
-        msg = MIMEMultipart()
-        msg['Subject'] = origin['Subject']
-        msg['Receive'] = origin['Receive']
-        msg['From'] = self.mail.frm
-        msg['To'] = self.mail.to[0]
-        msg['reply-to'] = ""
-        msg['X-Priority'] = ""
-        msg['CC'] = ""
-        msg['BCC'] = ""
-        msg['Tag'] = origin['Tag']
-        msg['MD5'] = origin['MD5']
-        msg['Return-Receipt-To'] = self.mail.frm
-        msg["Accept-Language"] = "zh-CN"
-        msg.preamble = 'Event Notification'
-        msg["Accept-Charset"] = "ISO-8859-1,utf-8"
-        msg.attach(MIMEText(body, ctype.split('/')[1], 'utf-8'))
-        print('mail -> ', self.mail.to[0])
-        -------------------"""
+
+        # body = origin.get_payload(decode=True)
+        # ctype = origin.get_content_type()
+        # msg = MIMEMultipart()
+        # msg['Subject'] = origin['Subject']
+        # msg['Receive'] = origin['Receive']
+        # msg['From'] = self.mail.frm
+        # msg['To'] = self.mail.to[0]
+        # msg['reply-to'] = ""
+        # msg['X-Priority'] = ""
+        # msg['CC'] = ""
+        # msg['BCC'] = ""
+        # msg['Tag'] = random_uuid
+        # msg['MD5'] = md.hexdigest()
+        # msg['Return-Receipt-To'] = self.mail.frm
+        # msg["Accept-Language"] = "zh-CN"
+        # msg.preamble = 'Event Notification'
+        # msg["Accept-Charset"] = "ISO-8859-1,utf-8"
+        # msg.attach(MIMEText(body, ctype.split('/')[1], 'utf-8'))
+        # print('mail -> ', self.mail.to[0])
+
 
         # msg = MIMEMultipart()
         # msg['Subject'] = origin.get('Subject', '')
@@ -183,10 +183,8 @@ class SMTPProxy(smtp_core.SMTPServerInterface):
         # msg["Accept-Charset"] = "ISO-8859-1,utf-8"
 
         obj_list = []
-        print('self.mail.mail_clients', self.mail.mail_clients)
         with ThreadPoolExecutor(max_workers=10) as e:
             for client in self.mail.mail_clients:
-                # try:
                 self.mail.msg = 'HOST:' + client._host + '\n' + self.mail.msg
                 # msg['HOST'] = client._host
                 obj = e.submit(self.send, client, self.mail.frm, self.mail.to[0], self.mail.msg)
@@ -195,15 +193,6 @@ class SMTPProxy(smtp_core.SMTPServerInterface):
                     senderrs = future.result()
                     print(senderrs, 'senderrrrrrrr')
             return True
-                # except smtplib.SMTPServerDisconnected as e:
-                #     import traceback
-                #     traceback.print_exc()
-                #     pass
-                # except:
-                #     import traceback
-                #     traceback.print_exc()
-                #     return False
-
 
     def send(self, client, sender, receiver, mail):
         try:
