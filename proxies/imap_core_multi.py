@@ -105,9 +105,9 @@ class Dispatch():
                     self.response_map[server_socket.socket().fileno()].append(response.replace(server_response_tag, self.client_tag, 1))
                     return
 
-            if self.client_command.upper() == 'IDLE':
-                self.response_map[server_socket.socket().fileno()].append(response)
-                return
+            # if self.client_command.upper() == 'IDLE':
+            #     self.response_map[server_socket.socket().fileno()].append(response)
+            #     return
 
             #没有tag
             self.response_map[server_socket.socket().fileno()].append(response)

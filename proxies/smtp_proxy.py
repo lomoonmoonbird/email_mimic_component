@@ -195,6 +195,7 @@ class SMTPProxy(smtp_core.SMTPServerInterface):
             return True
 
     def send(self, client, sender, receiver, mail):
+        senderrs = None
         try:
             senderrs = client.sendmail(sender, receiver, mail)
             client.quit()
@@ -202,7 +203,7 @@ class SMTPProxy(smtp_core.SMTPServerInterface):
         except:
             import traceback
             traceback.print_exc()
-            raise Exception('send errror')
+            raise Exception('send errror',senderrs, sender,receiver,client.__dict__)
 
 
 

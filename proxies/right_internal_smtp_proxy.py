@@ -116,11 +116,7 @@ class SMTPProxy(smtp_core.SMTPServerInterface):
         headers = parser.parsestr(self.mail.msg)
         tag = headers.get('Tag', "")
         host = headers.get('Host', "")
-        if not tag:
-            tag = 'tag_jinpeng'
-        if not host:
-            pass
-        print('iam data', tag, host)
+        print('iam data')
         try:
 
             if tag and host:
@@ -181,19 +177,16 @@ class SMTPProxy(smtp_core.SMTPServerInterface):
         import time
         while True:
             keys = client.scan_iter(match='tag_*', count=20)
-            print('keys', keys)
             for key in keys:
                 data = client.hgetall(key)
                 mail = right_judge(data)
-                print('is ok mail?', mail)
                 if mail:
                     host = "localhost"
                     server = smtplib.SMTP(host, port=25)
                     server.ehlo()
                     msg = email.message_from_string(mail.decode())
-                    print('@@@',msg['From'], msg['TO'])
                     senderrs = server.sendmail(msg['From'], msg['TO'], mail)
-                    print('send mail ', senderrs)
+                    print('send mail ', (msg['From'], msg['TO'], senderrs))
                     if not senderrs:
                         client.delete(key)
                     server.quit()

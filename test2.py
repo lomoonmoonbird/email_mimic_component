@@ -5,8 +5,8 @@ from email.header import Header
 
 host = "mail8.moonmoonbird.com"
 
-FROM = "mail2@moonmoonbird.com"
-TO = "jinpeng@comleader.com.cn"
+FROM = "lomoonmoonbird@163.com"
+TO = "mail2@moonmoonbird.com"
 message = MIMEText("""如果需要会员资料用于后续发送用的,建议邮箱地址进行验证;
 ----------
 1 用户不存在 代码550
@@ -34,12 +34,12 @@ message['From'] = FROM
 message['To'] = TO
 message['Subject'] = Header('postfix如何设置ccccc', 'utf-8')
 message['TAG'] = "tag_jinpeng"
-message['HOST'] = 'mail8.moonmoonbrid.com'
+message['HOST'] = 'mail.moonmoonbrid.com'
 
 server = smtplib.SMTP(host, port=25)
 server.set_debuglevel(1)
 a = server.ehlo()
-server.login("mail2", "mail2")
+server.login("mail1", "mail1")
 
 b = server.sendmail(FROM, TO, message.as_string())
 # print(server.verify("52071552@qq.com"))
