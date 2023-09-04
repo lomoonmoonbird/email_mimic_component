@@ -120,10 +120,10 @@ class SMTPProxy(smtp_core.SMTPServerInterface):
         random_uuid = str(uuid.uuid4())
         md = hashlib.md5()
         md.update(self.mail.msg.encode('utf-8'))
-        self.mail.msg = 'Receive: ( SMTP PROXY ) ' + email.utils.formatdate() + '\n' + self.mail.msg
-        self.mail.msg = 'Accept-Language: ISO-8859-1,utf-8' + '\n' + self.mail.msg
-        self.mail.msg = 'MD5:' + md.hexdigest() + '\n' + self.mail.msg
-        self.mail.msg = 'Tag:' + 'tag_' + random_uuid + '\n' + self.mail.msg
+        self.mail.msg = 'Receive: ( SMTP PROXY ) ' + email.utils.formatdate() + '\r\n' + self.mail.msg
+        self.mail.msg = 'Accept-Language: ISO-8859-1,utf-8' + '\r\n' + self.mail.msg
+        self.mail.msg = 'MD5:' + md.hexdigest() + '\r\n' + self.mail.msg
+        self.mail.msg = 'Tag:' + 'tag_' + random_uuid + '\r\n' + self.mail.msg
 
 
         origin = email.message_from_string(self.mail.msg)
@@ -185,7 +185,7 @@ class SMTPProxy(smtp_core.SMTPServerInterface):
         obj_list = []
         with ThreadPoolExecutor(max_workers=10) as e:
             for client in self.mail.mail_clients:
-                self.mail.msg = 'HOST:' + client._host + '\n' + self.mail.msg
+                self.mail.msg = 'HOST:' + client._host + '\r\n' + self.mail.msg
                 # msg['HOST'] = client._host
                 obj = e.submit(self.send, client, self.mail.frm, self.mail.to[0], self.mail.msg)
                 obj_list.append(obj)

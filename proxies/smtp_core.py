@@ -165,12 +165,11 @@ class SMTPServerEngine:
             self.data_accum = ""
             return ("354 OK, Enter data, terminated with a \\r\\n.\\r\\n", 1)
 
-
-
         elif cmd == "AUTH" and data[5:10].upper() == "PLAIN":
             self.impl.mail.create_clients()
             for client in self.impl.mail.mail_clients:
                 msg, resp = client.docmd(data.strip())
+                #todo 裁决
                 # return (bytes(msg) + b' ' + data, 1)
             self.state = SMTPServerEngine.ST_HELO
             return ("235 Authentication Succeeded", 1)

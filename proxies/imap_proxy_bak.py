@@ -48,7 +48,11 @@ COMMANDS = (
     'logout',
     'select',
     'move',
-    'fetch'
+    'fetch',
+    'idle',
+    'status',
+    'lsub',
+    ''
 )
 
 

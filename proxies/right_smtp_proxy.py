@@ -119,49 +119,51 @@ class SMTPProxy(smtp_core.SMTPServerInterface):
         if not tag:
             tag = 'tag_jinpeng'
         if not host:
-            pass
+            pass    
         print('iam data', tag, host)
         try:
 
             if tag and host:
-                origin = email.message_from_string(self.mail.msg)
-                msg = MIMEMultipart()
-                msg['Subject'] = origin['Subject']
-                msg['Receive'] = origin['Receive']
-                msg['From'] = self.mail.frm
-                msg['To'] = self.mail.to[0]
-                msg['reply-to'] = ""
-                msg['X-Priority'] = ""
-                msg['CC'] = ""
-                msg['BCC'] = ""
-                msg['Tag'] = origin['Tag']
-                msg['MD5'] = origin['MD5']
-                msg['Return-Receipt-To'] = self.mail.frm
-                msg["Accept-Language"] = "zh-CN"
-                msg.preamble = 'Event Notification'
-                msg["Accept-Charset"] = "ISO-8859-1,utf-8"
-
-                if origin.is_multipart():
-                    for part in origin.walk():
-                            ctype = part.get_content_type()
-                            cdispo = str(part.get('Content-Disposition'))
-
-                            if ctype == 'text/html' and 'attachment' not in cdispo:
-                                body = origin.get_payload(decode=True)
-                                ctype = origin.get_content_type()
-
-                                msg.attach(MIMEText(body, ctype.split('/')[1], 'utf-8'))
-                                print('multi part mail %s -> %s ' % (host, self.mail.to[0]))
-                                client.hset(tag, host, msg.as_string())
-                                client.expire(tag, 300)
-                else:
-                    body = origin.get_payload(decode=True)
-                    ctype = origin.get_content_type()
-
-                    msg.attach(MIMEText(body, ctype.split('/')[1], 'utf-8'))
-                    print('non multi part mail %s -> %s' % (host, self.mail.to[0]))
-                    client.hset(tag, host, msg.as_string())
-                    client.expire(tag, 300)
+                client.hset(tag, host, self.mail.msg)
+                client.expire(tag, 300)
+                # origin = email.message_from_string(self.mail.msg)
+                # msg = MIMEMultipart()
+                # msg['Subject'] = origin['Subject']
+                # msg['Receive'] = origin['Receive']
+                # msg['From'] = self.mail.frm
+                # msg['To'] = self.mail.to[0]
+                # msg['reply-to'] = ""
+                # msg['X-Priority'] = ""
+                # msg['CC'] = ""
+                # msg['BCC'] = ""
+                # msg['Tag'] = origin['Tag']
+                # msg['MD5'] = origin['MD5']
+                # msg['Return-Receipt-To'] = self.mail.frm
+                # msg["Accept-Language"] = "zh-CN"
+                # msg.preamble = 'Event Notification'
+                # msg["Accept-Charset"] = "ISO-8859-1,utf-8"
+                #
+                # if origin.is_multipart():
+                #     for part in origin.walk():
+                #             ctype = part.get_content_type()
+                #             cdispo = str(part.get('Content-Disposition'))
+                #
+                #             if ctype == 'text/html' and 'attachment' not in cdispo:
+                #                 body = origin.get_payload(decode=True)
+                #                 ctype = origin.get_content_type()
+                #
+                #                 msg.attach(MIMEText(body, ctype.split('/')[1], 'utf-8'))
+                #                 print('multi part mail %s -> %s ' % (host, self.mail.to[0]))
+                #                 client.hset(tag, host, msg.as_string())
+                #                 client.expire(tag, 300)
+                # else:
+                #     body = origin.get_payload(decode=True)
+                #     ctype = origin.get_content_type()
+                #
+                #     msg.attach(MIMEText(body, ctype.split('/')[1], 'utf-8'))
+                #     print('non multi part mail %s -> %s' % (host, self.mail.to[0]))
+                #     client.hset(tag, host, msg.as_string())
+                #     client.expire(tag, 300)
         except:
             import traceback
             traceback.print_exc()

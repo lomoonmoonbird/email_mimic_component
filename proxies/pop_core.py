@@ -272,8 +272,16 @@ class Dispatch():
             NOOP=self.handle_noop,
             QUIT=self.handle_quit,
             LOGIN=self.handle_login,
-            UIDL=self.handle_uidl
+            UIDL=self.handle_uidl,
+            AUTH = self.handle_auth,
+            CAPA = self.handle_capa,
         ).get(cmd, None)
+
+    def handle_capa(self):
+        self.saying(["+OK", "PLAIN", "LOGIN", "."])
+
+    def handle_auth(self):
+        self.saying(["+OK", "CAPA", "TOP", "UIDL", "RESP-CODES", "PIPELINING", "AUTH-RESP-CODE", "USER", "SASL PLAIN LOGIN", '.'])
 
     def handle_uidl(self):
         self.destroy()

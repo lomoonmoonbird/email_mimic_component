@@ -68,8 +68,9 @@ class Dispatch():
 
                 if not match:
                     self.send_to_client(self.error("Incorrect request"))
-                    raise ValueError('Error while listening the client: '
-                        + request + ' contains no tag and/or no command')
+                    continue
+                    # raise ValueError('Error while listening the client: '
+                    #     + request + ' contains no tag and/or no command')
 
                 self.client_tag = match.group('tag')
                 self.client_command = match.group('command').upper()
@@ -132,9 +133,11 @@ class Dispatch():
         while 1:
             try:
                 server_socket = imaplib.IMAP4(host)
-                server_socket.login(username, password)
-                self.response_map[server_socket.socket().fileno()].append(self.success())
-                return server_socket
+                r, d = server_socket.login(username, password)
+                if r == 'OK':
+                    self.response_map[server_socket.socket().fileno()].append(self.success())
+                    return server_socket
+                server_socket.logout()
             except imaplib.IMAP4.abort:
                 import traceback
                 traceback.print_exc()
@@ -234,9 +237,12 @@ class Dispatch():
             CAPABILITY=self.handle_capa,
             IDLE = self.handle_idle,
             ID = self.handle_id,
+            AUTHENTICATE = self.handle_authenticate,
             FETCH = self.handle_fetch
         ).get(cmd, None)
 
+    def handle_authenticate(self):
+        self.saying(["C2 OK    ."])
 
     def handle_idle(self):
         self.destroy()
@@ -295,6 +301,7 @@ class Dispatch():
         self.send_to_client(self.success())
 
     def handle_login(self):
+        print(len(self.server_sockets), '@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@')
         self.destroy()
         self.server_sockets = []
         username, password = self.client_flags.split(" ")
@@ -373,4 +380,5 @@ class IMAPServer:
 
     def handle_connection(self, sock):
         """处理imap连接"""
+        print('!!!!!!!!!!')
         Dispatch(sock, self.key).run()

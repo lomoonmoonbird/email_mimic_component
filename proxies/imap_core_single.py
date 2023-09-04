@@ -100,7 +100,6 @@ class Dispatch():
 
             #没有tag
             self.send_to_client(response.replace(server_tag,self.client_tag, 1))
-            self.boxes.append([response])
 
             if response.startswith('+') and self.client_command.upper() != 'FETCH':
                 #持续监听
@@ -199,62 +198,90 @@ class Dispatch():
             LOGIN=self.handle_login,
             CAPABILITY=self.handle_capa,
             ID = self.handle_id,
-            FETCH = self.handle_fetch
+            FETCH = self.handle_fetch,
+            IDLE=self.handle_idle,
+            LSUB=self.handle_lsub,
+            STATUS=self.handler_status,
         ).get(cmd, None)
+    def handle_idle(self):
+        print('handle_idle')
+        self.transmit()
+
+    def handler_status(self):
+        print('handler_status')
+        self.transmit()
+
+    def handle_lsub(self):
+        print('handle_lsub')
+        self.transmit()
 
     def handle_select(self):
+        print('handle_select')
         self.set_current_folder(self.client_flags)
         self.transmit()
 
     def handle_fetch(self):
+        print('handle_fetch')
         self.transmit()
 
 
     def handle_id(self):
-        if not self.server_socket:
-            self.listen_client()
-        self.transmit()
+        print('handle_id')
+        # if not self.server_socket:
+        #     self.listen_client()
+        # self.transmit()
+        self.send_to_client('* ID ("name" "Dovecot") \r\n C2 OK ID completed (0.001 + 0.000 secs).')
 
     def handle_capa(self):
+        print('handle_capa')
         self.send_to_client('* CAPABILITY ' + ' '.join(cap for cap in self.CAPABILITIES) + ' +')
         self.send_to_client(self.success())
 
     def handle_login(self):
+        print('handle_login')
         username, password = self.client_flags.split(" ")
         hosts = [(hp.split(':')[0], hp.split(':')[1]) for hp in smtpcfg['config'].distribute_hosts.split(",")]
-        print( hosts[1][0])
         self.connect_server(username, password, hosts[1][0])
         # self.connect_server(username, password, 'mail2.example.com')
 
     def handle_user(self):
+        print('handle_user')
         self.transmit()
 
     def handle_pass(self):
+        print('handle_pass')
         self.transmit()
 
     def handle_stat(self):
+        print('handle_stat')
         self.transmit()
 
     def handle_list(self):
+        print('handle_list')
         self.transmit()
 
     def handle_top(self):
+        print('handle_top')
         return None
 
     def handle_retr(self):
+        print('handle_retr')
         # pycircleanmail_module(self)
         self.transmit()
 
     def handle_dele(self):
+        print('handle_dele')
         return "+OK message 1 deleted"
 
     def handle_noop(self):
+        print('handle_noop')
         self.transmit()
         # self.email_server.select("INBOX")
         # flag, content = self.email_server.noop()
         # print(flag, content, ' ==', self.email_server.socket())
 
     def handle_quit(self):
+        print('handle_quit')
         # return "+OK proxy IMAP server signing off"
         self.client_listening = False
 
@@ -284,4 +311,5 @@ class IMAPServer:
     def handle_connection(self, sock):
         """处理imap连接"""
         # engine = IMAPServerEngine(sock, self._log)
+        print('!!!!!!')
         Dispatch(sock, self.key)
